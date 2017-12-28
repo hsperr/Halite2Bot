@@ -12,7 +12,6 @@ to log anything use the logging module.
 """
 # Let's start by importing the Halite Starter Kit so we can interface with the Halite engine
 import hlt
-import random
 # Then let's import the logging module so we can print out information
 import logging
 import math
@@ -20,49 +19,8 @@ from collections import OrderedDict, defaultdict
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
-botname = "TheDorian.V6.2"
+botname = "TheDorian.vector"
 game = hlt.Game(botname)
-
-def get_closest_dockable_planet(entities_by_distance, my_id):
-    try:
-        best_distance_per_slots, best_planet = 10000, None
-
-        for distance in entities_by_distance:
-            entity = entities_by_distance[distance][0]
-            if not isinstance(entity, hlt.entity.Planet):
-                continue
-
-            if not entity.is_owned() or (not entity.is_full() and entity.all_docked_ships()[0].owner.id == my_id):
-                if distance/entity.num_docking_spots < best_distance_per_slots:
-                    best_distance_per_slots = distance/entity.num_docking_spots
-                    best_planet = entity
-
-        if best_planet is None:
-            return None, None
-        return best_distance_per_slots, best_planet
-    except Exception as e:
-        logging.error("{}".format(e))
-
-def get_closest_enemy_ship(entities_by_distance, my_ships, player=None, force_docked=False):
-    try:
-        closest_solution = None, None
-
-        for distance in entities_by_distance:
-            entity = entities_by_distance[distance][0]
-            if not isinstance(entity, hlt.entity.Ship):
-                continue
-
-            if entity not in my_ships and (not player or entity.owner.id==player):
-                if force_docked:
-                    if entity.docking_status != entity.DockingStatus.DOCKED:
-                        closest_solution = distance, entity
-                    else:
-                        return distance, entity
-                else:
-                    return distance, entity
-        return closest_solution
-    except Exception as e:
-        logging.error("{}".format(e))
 
 def obstacles_between(ship, target):
     """
@@ -112,195 +70,175 @@ def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_correction
         speed = speed if (distance >= speed) else distance
         return ship.thrust(speed, angle)
 
-def mine(ship, game_map):
-    entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
-    distance, closest_dockable_planet = get_closest_dockable_planet(entities_by_distance, game_map.get_me().id)
-
-    if not distance:
-        ##logging.info("Wanted to mine, attacking instead {}".format(ship.id, distance, closest_dockable_planet))
-        if ship.id in job2ids[MINER]:
-            job2ids[MINER].remove(ship.id)
-            
-        return attack(ship, game_map)
-
-    ##logging.info("Miner {}, distance: {} target: {}".format(ship.id, distance, closest_dockable_planet))
-
-    job2ids[MINER].add(ship.id)
-
-    if ship.can_dock(closest_dockable_planet):
-        ##logging.info("docking ship:{}, to: {}".format(ship, closest_dockable_planet))
-        return ship.dock(closest_dockable_planet)
-    else:
-        ##logging.info("navigating ship:{}, to: {}".format(ship, closest_dockable_planet))
-        speed = min(int(hlt.constants.MAX_SPEED), max(ship.id*4, ticks))
-        navigate_command = navigate(ship,
-                ship.closest_point_to(closest_dockable_planet),
-                game_map,
-                speed=speed,
-                avoid_obstacles=True,
-                max_corrections=50)
-        return navigate_command
-
-def attack(ship, game_map, player=None, force_docked=False):
-    job2ids[ATTACKER].add(ship.id)
-    entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
-
-    closest_ship_distance, clostest_enemy_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships())
-    target_distance, target_ship = closest_ship_distance, clostest_enemy_ship
-
-    if force_docked:
-        closest_docked_ship_distance, closest_docked_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships(), player=player, force_docked=force_docked)
-        if closest_docked_ship_distance < closest_ship_distance*1.2:
-            target_distance, target_ship = closest_docked_ship_distance, closest_docked_ship
-
-    for target in targets: 
-        distance = ship.calculate_distance_between(target)
-        if distance < target_distance * 1.3:
-            target_distance, target_ship = distance, target
-
-    targets.add(target_ship)
-
-    ##logging.info("Attacker {}, distance: {} target: {}".format(ship.id, player_ship_distance, closest_enemy_ship))
-    navigate_command = ship.navigate(
-            ship.closest_point_to(target_ship),
-            game_map,
-            speed=int(hlt.constants.MAX_SPEED),
-            max_corrections=30,
-            ignore_ships=False)
-
-    return navigate_command
-
 ticks = 0
+def sign(x):
+    if x<0:
+        return -1
+    return 1
 
-job2ids = defaultdict(set)
 
-ATTACKER = 'attacker'
-MINER = 'miner'
-
-targets = set()
-
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
 while True:
     try:
         ticks+=1
         game_map = game.update_map()
         # Here we define the set of commands to be sent to the Halite engine at the end of the turn
+
+        logging.info("")
+        logging.info("***********************************")
+        logging.info("")
         command_queue = []
+        for ship in game_map.get_me().all_ships():
+            if not ship.docking_status == ship.DockingStatus.UNDOCKED:
+                logging.info("docked, skipping {}".format(ship))
+                continue
 
-        my_ships = game_map.get_me().all_ships()
-        free_ships = [x for x in my_ships if x.docking_status == x.DockingStatus.UNDOCKED and x.id not in job2ids[ATTACKER] and x.id not in job2ids[MINER] ]
-        total_ships = sum(len(x.all_ships()) for x in game_map.all_players())
-
-
-        targets = set([game_map.get_player(x.owner.id).get_ship(x.id) for x in targets if game_map.get_player(x.owner.id).get_ship(x.id) and game_map.get_player(x.owner.id).get_ship(x.id).health > 0])
-
-        my_id = game_map.get_me().id
-        living_shipids = set(x.id for x in my_ships)
-        job2ids[MINER] = job2ids[MINER].intersection(living_shipids)
-        job2ids[ATTACKER] = job2ids[ATTACKER].intersection(living_shipids)
-
-        #logging.info("Tick {}".format(ticks))
-        #logging.info("Me: {}, Ships: {}, FreeShips: {}".format(my_id, len(my_ships), len(free_ships)))
-        #logging.info("NumPlayers: {}, AllShips: {}, EmptyPlanets: {}".format(len(game_map.all_players()), total_ships, sum(1 for x in game_map.all_planets() if not x.is_owned())))
-
-        max_other_players_mining = 0
-        player_with_best_economy = None
-        living_players = 0
-
-        for player in game_map.all_players():
-                player_ships = len(player.all_ships())
-                if player_ships >0:
-                    living_players+=1
-                num_mining = sum(1 for x in player.all_ships() if x.docking_status == x.DockingStatus.DOCKED)
-
-                if num_mining>max_other_players_mining and not player.id == my_id:
-                    max_other_players_mining = num_mining
-                    player_with_best_economy = player.id
-
-                #logging.info("Player: {}, NumShips: {}, NumMiners: {}, NumPlanets: {} ".format(
-                        player.id,
-                        player_ships,
-                        num_mining,
-                        sum(1 for x in game_map.all_planets() if x.owner == player)
-                    ))
-
-        if ticks == 1:
-            if len(game_map.all_players())==2:
-                num_ships_rushing = int(random.random()*2)
-                for ship in free_ships:
-                   #logging.info("Rushing with {}, {}<{}".format(num_ships_rushing, game_map.width * game_map.height, 260*170))
-                   if len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
-                       command = attack(ship, game_map)
-                       if command:
-                           command_queue.append(command)
-                   else:
-                        command = mine(ship, game_map)
-                        if command:
-                            command_queue.append(command)
-            else:
-                for ship in free_ships:
-                    command = mine(ship, game_map)
+            done = False
+            for planet in game_map.all_planets():
+                if ship.can_dock(planet) and (not planet.is_owned() or (planet.owner == game_map.get_me() and not planet.is_full())):
+                    command = ship.dock(planet)
                     if command:
+                        logging.info("docking {} to {}".format(ship, planet))
                         command_queue.append(command)
-        else:
-            for ship in my_ships:
-                if ship.docking_status != ship.DockingStatus.UNDOCKED:
-#                   if not one_undocked:
-#                       entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
-#                       enemy_ship_count, my_ship_count = 0, 0
-#                       for distance, entities in entities_by_distance.items():
-#                           if distance > 10:
-#                               break
+                        done = True
+                        break
+            if done:
+                continue
 
-#                           enemy_ship_count += sum(1 for x in entities if isinstance(x, hlt.entity.Ship) and not x.owner==game_map.get_me())
-#                           my_ship_count += sum(1 for x in entities if isinstance(x, hlt.entity.Ship) and x.owner==game_map.get_me())
+            logging.info("moving {}".format(ship))
+            global_x, global_y = 0, 0
 
+            biases = {
+                    "my_planet": {
+                        0: (-1, 1),
+                        1:( 1, 0.005),
+                        2:( 1, 0.004),
+                        3:( 1, 0.003),
+                        4:( 1, 0.002),
+                        5:( 1, 0.001),
+                    },
+                    "empty_planet": {
+                        1:( 1, 0.05),
+                        2:( 1, 0.004),
+                        3:( 1, 0.003),
+                        4:( 1, 0.002),
+                        5:( 1, 0.001),
+                    },
+                    "enemy_planet": {
+                        0:( 1, 0.001),
+                        1:( 1, 0.001),
+                        2:( 1, 0.002),
+                        3:( 1, 0.003),
+                        4:( 1, 0.004),
+                        5: (1, 0.005),
+                    },
+                    "my_ship": (-2, 1),
+                    "enemy_ship": (5, 0.06)
+            }
+            contribs = []
 
-#                       if enemy_ship_count>my_ship_count and ship.docking_status == ship.DockingStatus.DOCKED:
-#                           one_undocked = True
-#                           #logging.info("Undocking to attack: {} {}".format(ship, entities))
-#                           command_queue.append(ship.undock())
-#                           job2ids[ATTACKER].add(ship.id)
-#                           break
-                    continue
-                best_economy = len(job2ids[MINER]) >= max(len(game_map.all_players()), max_other_players_mining+2)
-
-                if ship.id in job2ids[ATTACKER]:
-                    command = attack(ship, game_map, player=player_with_best_economy, force_docked=best_economy)
-                    if command:
-                        command_queue.append(command)
-                elif ship.id in job2ids[MINER]:
-                    command = mine(ship, game_map)
-                    if command:
-                        command_queue.append(command)
-                else:
-                    if best_economy:
-                        if ship.id%6==0:
-                            command = mine(ship, game_map)
-                            if command:
-                                command_queue.append(command)
-                        else:
-                            if living_players==2:
-                                if best_economy:
-                                    command = attack(ship, game_map)
-                                else:
-                                    command = attack(ship, game_map, force_docked=True)
-                            else:
-                                command = attack(ship, game_map, player=player_with_best_economy, force_docked=best_economy)
-
-                            if command:
-                                command_queue.append(command)
-                    elif ship.id % 6 == 0:
-                        command = attack(ship, game_map, player=player_with_best_economy, force_docked=best_economy)
-                        if command:
-                            command_queue.append(command)
+            for planet in game_map.all_planets():
+                    num_open_spots = min(5, planet.num_docking_spots - len(planet.all_docked_ships()))
+                    if not planet.is_owned():
+                        att, G = biases['empty_planet'][num_open_spots]
+                    elif planet.owner == game_map.get_me():
+                        att, G = biases['my_planet'][num_open_spots]
                     else:
-                        command = mine(ship, game_map)
-                        if command:
-                            command_queue.append(command)
+                        att, G = biases['enemy_planet'][num_open_spots]
+
+                    distance = ship.calculate_distance_between(planet)
+                    contrib = att*math.exp(-G*distance**2)
+                    contrib_x = contrib*(planet.x-ship.x)
+                    contrib_y = contrib*(planet.y-ship.y)
+
+                    logging.info("contrib {}, contrib(x={}, y={}), distance {}, att {}, G {}, my(x={}, y={}), curmov(x={}, y={}), object: {}".format(contrib, contrib_x, contrib_y, distance, att, G, ship.x, ship.y, global_x, global_y, planet))
+                    global_x += contrib_x
+                    global_y += contrib_y
+
+                    contribs.append({
+                        "from": ship,
+                        "entity": planet,
+                        "distance": ship.calculate_distance_between(planet),
+                       "contrib": contrib,
+                       "contrib_x": contrib_x,
+                       "contrib_y": contrib_y,
+                        })
+
+#                   logging.info("planet  {}".format(planet))
+#                   logging.info("att {} G {} dist {}".format(att, G, ship.calculate_distance_between(planet)))
+#                   logging.info("contrib {}".format(contrib))
+#                   logging.info("contrib_x {}".format(contrib_x))
+#                   logging.info("contrib_y {}".format(contrib_y))
+#                   logging.info("global_x {}".format(global_x))
+#                   logging.info("global_y {}".format(global_y))
+
+            for player in game_map.all_players():
+                for s2 in player.all_ships():
+                    if s2.id == ship.id:
+                        continue
+
+                    if s2.owner == game_map.get_me():
+                        att, G = biases['my_ship']
+                    else:
+                        att, G = biases['enemy_ship']
+
+                    distance = ship.calculate_distance_between(s2)
+                    contrib = att*math.exp(-G*distance**2)
+
+                    contrib_x = contrib*(s2.x-ship.x)
+                    contrib_y = contrib*(s2.y-ship.y)
 
 
+                    contribs.append({
+                        "from": ship,
+                        "entity": s2,
+                        "distance": ship.calculate_distance_between(s2),
+                       "contrib": contrib,
+                       "contrib_x": contrib_x,
+                       "contrib_y": contrib_y,
+                        })
+
+#                   logging.info("ship  {}, owner {}".format(s2, s2.owner.id))
+#                   logging.info("att {} G {} dist {}".format(att, G, ship.calculate_distance_between(s2)))
+#                   logging.info("ship.x {} ship.y {}".format(ship.x, ship.y))
+                    logging.info("contrib {}, contrib(x={}, y={}), distance {}, my(x={}, y={}), curmov(x={}, y={}), object: {}".format(contrib, contrib_x, contrib_y, distance, ship.x, ship.y, global_x, global_y, s2))
+
+                    global_x += contrib_x
+                    global_y += contrib_y
+#                   logging.info("contrib_x {}".format(contrib_x))
+#                   logging.info("contrib_y {}".format(contrib_y))
+#                   logging.info("global_x {}".format(global_x))
+#                   logging.info("global_y {}".format(global_y))
+
+            #for entry in sorted(contribs, key=lambda x: (str(x['from']), x['distance'])):
+                #global_x, global_y = entry['contrib_x'], entry['contrib_y']
+            #    logging.info("{}".format(entry))
+                #break
+
+            new_position = hlt.entity.Position(ship.x+global_x, ship.y+global_y)
+            distance_to_pos = ship.calculate_distance_between(new_position)
+
+            new_x = ship.x+(global_x/max(0.000000000000000000001, distance_to_pos))*7
+            new_y = ship.y+(global_y/max(0.000000000000000000001, distance_to_pos))*7
+
+            logging.info("moving from {} {} in {} {}, dist {} to {} {}".format(ship.x, ship.y, global_x, global_y, distance_to_pos, new_x, new_y))
+
+            navigate_command = ship.navigate(
+                    hlt.entity.Position(new_x, new_y),
+                    game_map,
+                    speed=int(hlt.constants.MAX_SPEED),
+                    ignore_ships=True)
+
+            if navigate_command:
+                command_queue.append(navigate_command)
         # Send our set of commands to the Halite engine for this turn
         game.send_command_queue(command_queue)
+        target = None
         # TURN END
     except Exception as e:
         logging.error("Main: {}".format(e))

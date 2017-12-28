@@ -19,7 +19,7 @@ from collections import OrderedDict, defaultdict
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
-botname = "TheDorian.V6.1"
+botname = "TheDorian.vector"
 game = hlt.Game(botname)
 
 def obstacles_between(ship, target):
@@ -77,11 +77,21 @@ def sign(x):
     return 1
 
 
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
+logging.info("***********************************")
 while True:
     try:
         ticks+=1
         game_map = game.update_map()
         # Here we define the set of commands to be sent to the Halite engine at the end of the turn
+
+        logging.info("")
+        logging.info("***********************************")
+        logging.info("")
         command_queue = []
         for ship in game_map.get_me().all_ships():
             if not ship.docking_status == ship.DockingStatus.UNDOCKED:
@@ -105,56 +115,48 @@ while True:
 
             biases = {
                     "my_planet": {
-                        0: 1000.0,
-                        1: 0.1,
-                        2: 0.01,
-                        3: 0.001,
-                        4: 0.001,
-                        5: 0.0001,
+                        0: (-1, 1),
+                        1:( 1, 0.005),
+                        2:( 1, 0.004),
+                        3:( 1, 0.003),
+                        4:( 1, 0.002),
+                        5:( 1, 0.001),
                     },
                     "empty_planet": {
-                        1: 0.01,
-                        2: 0.001,
-                        3: 0.001,
-                        4: 0.00001,
-                        5: 0.0000001,
+                        1:( 1, 0.05),
+                        2:( 1, 0.004),
+                        3:( 1, 0.003),
+                        4:( 1, 0.002),
+                        5:( 1, 0.001),
                     },
                     "enemy_planet": {
-                        0: 0.0001,
-                        1: 0.001,
-                        2: 0.01,
-                        3: 0.1,
-                        4: 0.1,
-                        5: 0.1,
+                        0:( 1, 0.001),
+                        1:( 1, 0.001),
+                        2:( 1, 0.002),
+                        3:( 1, 0.003),
+                        4:( 1, 0.004),
+                        5: (1, 0.005),
                     },
-                    "my_ship": 0.0005,
-                    "enemy_ship": 0.00001
-            }
-            attractions = {
-                    "my_planet": 1,
-                    "empty_planet": 1,
-                    "enemy_planet": 1,
-                    "my_ship": -1,
-                    "enemy_ship": 10
+                    "my_ship": (-2, 1),
+                    "enemy_ship": (5, 0.06)
             }
             contribs = []
+
             for planet in game_map.all_planets():
                     num_open_spots = min(5, planet.num_docking_spots - len(planet.all_docked_ships()))
                     if not planet.is_owned():
-                        att = attractions['empty_planet']
-                        G = biases['empty_planet'][num_open_spots]
+                        att, G = biases['empty_planet'][num_open_spots]
                     elif planet.owner == game_map.get_me():
-                        att = attractions['my_planet']
-                        G = biases['my_planet'][num_open_spots]
+                        att, G = biases['my_planet'][num_open_spots]
                     else:
-                        att = attractions['enemy_planet']
-                        G = biases['enemy_planet'][num_open_spots]
+                        att, G = biases['enemy_planet'][num_open_spots]
 
                     distance = ship.calculate_distance_between(planet)
                     contrib = att*math.exp(-G*distance**2)
-                    contrib_x = contrib*(planet.x-ship.x)/distance
-                    contrib_y = contrib*(planet.y-ship.y)/distance
+                    contrib_x = contrib*(planet.x-ship.x)
+                    contrib_y = contrib*(planet.y-ship.y)
 
+                    logging.info("contrib {}, contrib(x={}, y={}), distance {}, att {}, G {}, my(x={}, y={}), curmov(x={}, y={}), object: {}".format(contrib, contrib_x, contrib_y, distance, att, G, ship.x, ship.y, global_x, global_y, planet))
                     global_x += contrib_x
                     global_y += contrib_y
 
@@ -181,16 +183,16 @@ while True:
                         continue
 
                     if s2.owner == game_map.get_me():
-                        att = attractions['my_ship']
-                        G = biases['my_ship']
+                        att, G = biases['my_ship']
                     else:
-                        att = attractions['enemy_ship']
-                        G = biases['enemy_ship']
+                        att, G = biases['enemy_ship']
 
                     distance = ship.calculate_distance_between(s2)
                     contrib = att*math.exp(-G*distance**2)
-                    contrib_x = contrib*(s2.x-ship.x)/distance
-                    contrib_y = contrib*(s2.y-ship.y)/distance
+
+                    contrib_x = contrib*(s2.x-ship.x)
+                    contrib_y = contrib*(s2.y-ship.y)
+
 
                     contribs.append({
                         "from": ship,
@@ -204,22 +206,30 @@ while True:
 #                   logging.info("ship  {}, owner {}".format(s2, s2.owner.id))
 #                   logging.info("att {} G {} dist {}".format(att, G, ship.calculate_distance_between(s2)))
 #                   logging.info("ship.x {} ship.y {}".format(ship.x, ship.y))
-#                   logging.info("contrib {}".format(contrib))
+                    logging.info("contrib {}, contrib(x={}, y={}), distance {}, my(x={}, y={}), curmov(x={}, y={}), object: {}".format(contrib, contrib_x, contrib_y, distance, ship.x, ship.y, global_x, global_y, s2))
+
+                    global_x += contrib_x
+                    global_y += contrib_y
 #                   logging.info("contrib_x {}".format(contrib_x))
 #                   logging.info("contrib_y {}".format(contrib_y))
 #                   logging.info("global_x {}".format(global_x))
 #                   logging.info("global_y {}".format(global_y))
 
-            for entry in sorted(contribs, key=lambda x: (str(x['from']), x['distance'])):
+            #for entry in sorted(contribs, key=lambda x: (str(x['from']), x['distance'])):
                 #global_x, global_y = entry['contrib_x'], entry['contrib_y']
-                logging.info("{}".format(entry))
+            #    logging.info("{}".format(entry))
                 #break
 
-            logging.info("moving from {} {} to {} {}".format(ship.x, ship.y, ship.x+global_x, ship.y+global_y))
+            new_position = hlt.entity.Position(ship.x+global_x, ship.y+global_y)
+            distance_to_pos = ship.calculate_distance_between(new_position)
 
+            new_x = ship.x+(global_x/max(0.000000000000000000001, distance_to_pos))*7
+            new_y = ship.y+(global_y/max(0.000000000000000000001, distance_to_pos))*7
+
+            logging.info("moving from {} {} in {} {}, dist {} to {} {}".format(ship.x, ship.y, global_x, global_y, distance_to_pos, new_x, new_y))
 
             navigate_command = ship.navigate(
-                    hlt.entity.Position(ship.x+global_x*7, ship.y+global_y*7),
+                    hlt.entity.Position(new_x, new_y),
                     game_map,
                     speed=int(hlt.constants.MAX_SPEED),
                     ignore_ships=True)
