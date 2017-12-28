@@ -19,7 +19,7 @@ from collections import OrderedDict, defaultdict
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
-botname = "TheDorian.Vec.V1"
+botname = "TheDorian.vector.post"
 game = hlt.Game(botname)
 
 
@@ -178,12 +178,12 @@ while True:
                         5:( 1, 0.001),
                     },
                     "enemy_planet": {
-                        0:( 0, 0.001),
-                        1:( 0, 0.001),
-                        2:( 0, 0.002),
-                        3:( 0, 0.003),
-                        4:( 0, 0.004),
-                        5: (0, 0.005),
+                        0:( 1, 0.001),
+                        1:( 1, 0.001),
+                        2:( 1, 0.002),
+                        3:( 1, 0.003),
+                        4:( 1, 0.004),
+                        5: (1, 0.005),
                     },
                     "my_ship": (-1, 1),
                     "enemy_ship": (1, 0.06)
