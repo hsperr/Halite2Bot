@@ -6,10 +6,10 @@ import sys
 
 biases = {
         "my_planet": (1, 0.001),
-        "empty_planet": (1, 0.0005),
-        "enemy_planet": (1, 0.001),
-        "my_ship": (-1, 0.1),
-        "enemy_ship": (1, 0.1)
+        "empty_planet": (1, 0.001),
+        "enemy_planet": (1, 0.002),
+        "my_ship": (-1, 0.02),
+        "enemy_ship": (1, 0.02)
 }
 botname = "Vectorian"
 
@@ -43,7 +43,7 @@ def obstacles_between(ship, target, fudge=0.0):
             obstacles.append(foreign_entity)
     return obstacles
 
-def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_corrections=90, angular_step=3):
+def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_corrections=90, angular_step=5):
         """
         Move a ship to a specific target position (Entity). It is recommended to place the position
         itself here, else navigate will crash into the target. If avoid_obstacles is set to True (default)
@@ -159,10 +159,6 @@ while True:
             if not ship.docking_status == ship.DockingStatus.UNDOCKED:
                 continue
 
-            if done:
-                break
-
-            done += 1
             entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
             closest_planet_distance, closest_planet = get_closest_dockable_planet(entities_by_distance, my_id)
             closest_ship_distance, closest_ship = get_closest_enemy_ship(entities_by_distance, my_ships)
@@ -191,7 +187,7 @@ while True:
                 if isinstance(entity, hlt.entity.Planet):
                     if not entity.is_owned():
                         att, G = biases['empty_planet']
-                        #att = entity.num_docking_spots
+                        #att = entity.num_spots_left()
                     elif entity.owner == game_map.get_me():
                         att, G = biases['my_planet']
                         if entity.is_full():
@@ -214,14 +210,14 @@ while True:
                 global_x += contrib_x
                 global_y += contrib_y
 
-                logging.info("CONTRIB *************")
-                logging.info("CONTRIB tick {}, ship {}".format(ticks,ship))
-                logging.info("CONTRIB tick {}, target {}".format(ticks, entity))
-                logging.info("CONTRIB tick {}, distance {}".format(ticks,distance))
-                logging.info("CONTRIB tick {}, att, G {} {}".format(ticks,att, G))
-                logging.info("CONTRIB tick {}, contrib {}".format(ticks,contrib))
-                logging.info("CONTRIB tick {}, contrib x/y {} {}".format(ticks, contrib_x, contrib_y))
-                logging.info("CONTRIB tick {}, global x/y {} {}".format(ticks, global_x,global_y))
+#               logging.info("CONTRIB *************")
+#               logging.info("CONTRIB tick {}, ship {}".format(ticks,ship))
+#               logging.info("CONTRIB tick {}, target {}".format(ticks, entity))
+#               logging.info("CONTRIB tick {}, distance {}".format(ticks,distance))
+#               logging.info("CONTRIB tick {}, att, G {} {}".format(ticks,att, G))
+#               logging.info("CONTRIB tick {}, contrib {}".format(ticks,contrib))
+#               logging.info("CONTRIB tick {}, contrib x/y {} {}".format(ticks, contrib_x, contrib_y))
+#               logging.info("CONTRIB tick {}, global x/y {} {}".format(ticks, global_x,global_y))
                 
 
             target = hlt.entity.Position(ship.x+global_x, ship.y+global_y)
@@ -247,7 +243,7 @@ while True:
             #command_queue.append(ship.thrust(speed, angle))
             command = navigate(ship, target, game_map, 7)
             if command:
-                #move_targets.append(target)
+                move_targets.append(target)
                 command_queue.append(command)
         # Send our set of commands to the Halite engine for this turn
         game.send_command_queue(command_queue)

@@ -20,7 +20,7 @@ from collections import OrderedDict, defaultdict
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
-botname = "TheDorian.V6.3"
+botname = "TheDorian.V6.2"
 game = hlt.Game(botname)
 
 def get_closest_dockable_planet(entities_by_distance, my_id):
@@ -76,7 +76,7 @@ def obstacles_between(ship, target):
     for foreign_entity in game_map.all_planets() + game_map.all_ships():
         if foreign_entity == target:
             continue
-        if hlt.collision.intersect_segment_circle(ship, target, foreign_entity, fudge=ship.radius + 0.1):
+        if collision.intersect_segment_circle(ship, target, foreign_entity, fudge=ship.radius + 0.1):
             obstacles.append(foreign_entity)
     return obstacles
 
@@ -108,7 +108,7 @@ def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_correction
             new_target_dx = math.cos(math.radians(angle + angular_step)) * distance
             new_target_dy = math.sin(math.radians(angle + angular_step)) * distance
             new_target = hlt.entity.Position(ship.x + new_target_dx, ship.y + new_target_dy)
-            return navigate(ship, new_target, game_map, speed, True, max_corrections - 1, angular_step)
+            return ship.navigate(new_target, game_map, speed, True, max_corrections - 1, angular_step)
         speed = speed if (distance >= speed) else distance
         return ship.thrust(speed, angle)
 
@@ -145,13 +145,13 @@ def attack(ship, game_map, player=None, force_docked=False):
     job2ids[ATTACKER].add(ship.id)
     entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
 
+    closest_ship_distance, clostest_enemy_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships())
+    target_distance, target_ship = closest_ship_distance, clostest_enemy_ship
 
     if force_docked:
         closest_docked_ship_distance, closest_docked_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships(), player=player, force_docked=force_docked)
-        target_distance, target_ship = closest_docked_ship_distance, closest_docked_ship
-    else:
-        closest_ship_distance, clostest_enemy_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships())
-        target_distance, target_ship = closest_ship_distance, clostest_enemy_ship
+        if closest_docked_ship_distance < closest_ship_distance*1.2:
+            target_distance, target_ship = closest_docked_ship_distance, closest_docked_ship
 
     for target in targets: 
         distance = ship.calculate_distance_between(target)
@@ -164,18 +164,17 @@ def attack(ship, game_map, player=None, force_docked=False):
     navigate_command = ship.navigate(
             ship.closest_point_to(target_ship),
             game_map,
-            speed=int(hlt.constants.MAX_SPEED))
+            speed=int(hlt.constants.MAX_SPEED),
+            ignore_ships=False)
 
     return navigate_command
 
 ticks = 0
 
 job2ids = defaultdict(set)
-shipid2health = defaultdict(int)
 
 ATTACKER = 'attacker'
 MINER = 'miner'
-ECONKILLER = 'ECONKILLER'
 
 targets = set()
 
@@ -227,12 +226,12 @@ while True:
             if len(game_map.all_players())==2:
                 num_ships_rushing = int(random.random()*2)
                 for ship in free_ships:
-                   logging.info("Rushing with {}, {}<{}".format(num_ships_rushing, game_map.width * game_map.height, 260*170))
-                   if len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
-                       command = attack(ship, game_map)
-                       if command:
-                           command_queue.append(command)
-                   else:
+#                  logging.info("Rushing with {}, {}<{}".format(num_ships_rushing, game_map.width * game_map.height, 260*170))
+#                  if len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
+#                      command = attack(ship, game_map)
+#                      if command:
+#                          command_queue.append(command)
+#                  else:
                         command = mine(ship, game_map)
                         if command:
                             command_queue.append(command)
@@ -280,12 +279,12 @@ while True:
                                 command_queue.append(command)
                         else:
                             if living_players==2:
-                                if len(job2ids[ATTACKER]) > 5 and not len(job2ids[ECONKILLER]):
-                                    command = attack(ship, game_map, force_docked=True)
-                                else:
+                                if best_economy:
                                     command = attack(ship, game_map)
+                                else:
+                                    command = attack(ship, game_map, force_docked=True)
                             else:
-                                command = attack(ship, game_map, player=player_with_best_economy, force_docked=True)
+                                command = attack(ship, game_map, player=player_with_best_economy, force_docked=best_economy)
 
                             if command:
                                 command_queue.append(command)
