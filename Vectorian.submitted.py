@@ -5,13 +5,13 @@ from collections import OrderedDict, defaultdict
 import sys
 
 biases = {
-        "my_planet": (1, 0.01),
+        "my_planet": (1, 0.02),
         "empty_planet": (1, 0.02),
         "enemy_planet": (1, 0.01),
-        "my_ship": (-1, 0.001),
+        "my_ship": (-1, 0.01),
         "enemy_ship": (1, 0.01)
 }
-botname = "Vectorian.V2"
+botname = "Vectorian"
 
 if len(sys.argv) ==2:
     weights = [float(x) for x in sys.argv[1].split("#")]

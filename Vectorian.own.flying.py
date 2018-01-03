@@ -5,13 +5,13 @@ from collections import OrderedDict, defaultdict
 import sys
 
 biases = {
-        "my_planet": (1, 0.01),
-        "empty_planet": (1, 0.02),
-        "enemy_planet": (1, 0.01),
-        "my_ship": (-1, 0.001),
-        "enemy_ship": (1, 0.01)
+        "my_planet": (1, 0.001),
+        "empty_planet": (1, 0.001),
+        "enemy_planet": (1, 0.002),
+        "my_ship": (-1, 0.02),
+        "enemy_ship": (1, 0.02)
 }
-botname = "Vectorian.V2"
+botname = "Vectorian"
 
 if len(sys.argv) ==2:
     weights = [float(x) for x in sys.argv[1].split("#")]
@@ -27,21 +27,17 @@ if len(sys.argv) ==2:
 
 game = hlt.Game(botname)
 
-def obstacles_between(ship, target, ignore=(), fudge=0.1):
+def obstacles_between(ship, target, fudge=0.0):
     """
     Check whether there is a straight-line path to the given point, without planetary obstacles in between.
-
     :param entity.Ship ship: Source entity
     :param entity.Entity target: Target entity
-    :param entity.Entity ignore: Which entity type to ignore
     :return: The list of obstacles between the ship and target
     :rtype: list[entity.Entity]
     """
     obstacles = []
-    entities = ([] if issubclass(hlt.entity.Planet, ignore) else game_map.all_planets()) \
-        + ([] if issubclass(hlt.entity.Ship, ignore) else game_map._all_ships())
-    for foreign_entity in entities + move_targets:
-        if foreign_entity == ship or foreign_entity == target:
+    for foreign_entity in game_map.all_planets() + game_map.all_own_ships() + move_targets:
+        if foreign_entity == target:
             continue
         if hlt.collision.intersect_segment_circle(ship, target, foreign_entity, fudge=ship.radius + fudge):
             obstacles.append(foreign_entity)
@@ -73,9 +69,16 @@ def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_correction
         distance = ship.calculate_distance_between(target)
         angle = ship.calculate_angle_between(target)
         if avoid_obstacles:
-            obstacles = obstacles_between(ship, target)
+            obstacles = game_map.obstacles_between(ship, target)
             if obstacles:
-                new_target = ship + hlt.entity.Position(math.cos(math.radians(angle + angular_step)) * distance, math.sin(math.radians(angle + angular_step)) * distance)
+               #logging.info("Turning {}".format(ship))
+               #logging.info("Target {}".format(target))
+               #logging.info("Obstacle {}".format(obstacles))
+               #logging.info("Angle {}".format(angle))
+               #logging.info("Distance {}".format(distance))
+                new_target_dx = math.cos(math.radians(angle + angular_step)) * distance
+                new_target_dy = math.sin(math.radians(angle + angular_step)) * distance
+                new_target = hlt.entity.Position(ship.x + new_target_dx, ship.y + new_target_dy)
                 return navigate(ship, new_target, game_map, speed, True, max_corrections - 1, angular_step)
         return ship.thrust(speed, angle)
 
@@ -126,8 +129,8 @@ ticks = 0
 def radial(att, G, distance):
     return att*math.exp(-G*distance**2)
 
-def mexican_hat(att, G, distance):
-    return att*2/(math.sqrt(3*G)*3.141**(0.25))*(1-(distance/G)**2)*math.exp(-distance**2/(2*G**2))
+def mexican_hat(att, g, distance):
+    return att*2/(math.sqrt(3*G)*3.141**(0.25))*(1-(distance/G)**2)*exp(-distance**2/(2*G**2))
 
 while True:
     try:
@@ -184,7 +187,7 @@ while True:
                 if isinstance(entity, hlt.entity.Planet):
                     if not entity.is_owned():
                         att, G = biases['empty_planet']
-                        att = entity.num_spots_left()
+                        #att = entity.num_spots_left()
                     elif entity.owner == game_map.get_me():
                         att, G = biases['my_planet']
                         if entity.is_full():
@@ -194,7 +197,8 @@ while True:
                 if isinstance(entity, hlt.entity.Ship):
                     if entity.owner == game_map.get_me():
                         att, G = biases['my_ship']
-                        contrib_func = mexican_hat
+                        if distance > 20:
+                            att = 0
                     else:
                         att, G = biases['enemy_ship']
 
@@ -226,35 +230,35 @@ while True:
 
 #            logging.info("tick {}, Ship {} {}, target {}, distance {}".format(ticks, ship.x, ship.y, target, distance))
 
-#           obstacles = list(filter(lambda x: not x == ship, obstacles_between(ship, target)))
-#           for obstacle in obstacles:
-#               distance_to_obstacle = target.calculate_distance_between(obstacle)
-#               logging.info("Distance to obstacle {} {} {}".format(distance_to_obstacle, not obstacle == ship, ship))
-#               if not obstacle == ship and distance_to_obstacle:
-#                   distance_to_obstacle = ship.calculate_distance_between(ship.closest_point_to(obstacle))
-#                   speed = min(speed, distance_to_obstacle)
+            obstacles = list(filter(lambda x: not x == ship, obstacles_between(ship, target)))
+            for obstacle in obstacles:
+                distance_to_obstacle = target.calculate_distance_between(obstacle)
+                logging.info("Distance to obstacle {} {} {}".format(distance_to_obstacle, not obstacle == ship, ship))
+                if not obstacle == ship and distance_to_obstacle:
+                    distance_to_obstacle = ship.calculate_distance_between(ship.closest_point_to(obstacle))
+                    speed = min(speed, distance_to_obstacle)
 
-#                   clos_x, clos_y = hlt.collision.closest_point_on_path_to(ship, target, obstacle, fudge=ship.radius+0.1)
-#                   closest_point = hlt.entity.Position(clos_x, clos_y)
-#                   avoid = (closest_point - obstacle).normalize() * 7
-#                   logging.info("Ship {}".format(ship))
-#                   logging.info("Target {}".format(target))
-#                   logging.info("Obstacle {}".format(obstacle))
-#                   logging.info("closest point {}".format(closest_point))
-#                   logging.info("distance {}".format(distance_to_obstacle))
-#                   logging.info("avoid {}".format(avoid))
-#                   target = target + avoid
-#                   logging.info("new target {}".format(target))
+                    clos_x, clos_y = hlt.collision.closest_point_on_path_to(ship, target, obstacle, fudge=ship.radius+0.1)
+                    closest_point = hlt.entity.Position(clos_x, clos_y)
+                    avoid = (closest_point - obstacle).normalize() * 7
+                    logging.info("Ship {}".format(ship))
+                    logging.info("Target {}".format(target))
+                    logging.info("Obstacle {}".format(obstacle))
+                    logging.info("closest point {}".format(closest_point))
+                    logging.info("distance {}".format(distance_to_obstacle))
+                    logging.info("avoid {}".format(avoid))
+                    target = target + avoid
+                    logging.info("new target {}".format(target))
 
-#               
-#           angle = ship.calculate_angle_between(target)
-#           logging.info("Obstacles {} angle {} speed {}".format(obstacles, angle, speed))
-#           command_queue.append(ship.thrust(speed, angle))
+                
+            angle = ship.calculate_angle_between(target)
+            logging.info("Obstacles {} angle {} speed {}".format(obstacles, angle, speed))
+            command_queue.append(ship.thrust(speed, angle))
 
-            command = navigate(ship, target, game_map, 7)
-            if command:
-                move_targets.append(target)
-                command_queue.append(command)
+#           command = navigate(ship, target, game_map, 7)
+#           if command:
+#               move_targets.append(target)
+#               command_queue.append(command)
         # Send our set of commands to the Halite engine for this turn
         game.send_command_queue(command_queue)
         target = None

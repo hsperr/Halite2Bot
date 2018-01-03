@@ -1,5 +1,6 @@
 import subprocess
 import re
+import json
 import multiprocessing
 
 class Worker(multiprocessing.Process):
@@ -20,25 +21,9 @@ class Worker(multiprocessing.Process):
             result_queue.put(wins)
 
     def run_experiment(self, bot1, bot2, seed):
-            args = ['./halite', '-s', str(seed), '-d', '240 160', 'python3 {}'.format(bot1), 'python3 {}'.format(bot2)]
-            line = subprocess.check_output(args).decode('utf-8').split('\n')[-3]
-            assert "Player #0" in line
-
-            frame = re.search('frame #(\d*)', line, re.IGNORECASE)
-            frame = int(frame.group(1))
-
-            ships = re.search('(\d*) ships', line, re.IGNORECASE)
-            ships = int(ships.group(1))
-
-            rank = re.search('rank #(\d)', line, re.IGNORECASE)
-            rank = int(rank.group(1))
-            
-            wins = 0
-            if rank == 1:
-                wins+=1
-            #print(runs, [line.split(',')[:2], frame, ships, rank], wins)
-            return wins
-
+            args = ['./halite', '-r' ,'-q', '-s', str(seed), '-d', '240 160', 'python3 {}'.format(bot1), 'python3 {}'.format(bot2)]
+            results = json.loads(subprocess.check_output(args).decode('utf-8'))
+            return results['stats']['0']['rank'] == 1
 
 from scipy.optimize import minimize
 
@@ -55,10 +40,10 @@ import sys
 
 bot1 = sys.argv[1]
 bot2 = sys.argv[2]
-random.seed(433)
+random.seed(433122)
 
 n = 9
-runs = 50
+runs = 70
 
 seeds = [int(''.join(["%s" % random.randint(0, 9) for num in range(0, n)])) for i in range(runs)]
 print("example seed", seeds[:2])

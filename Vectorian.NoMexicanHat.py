@@ -6,12 +6,12 @@ import sys
 
 biases = {
         "my_planet": (1, 0.01),
-        "empty_planet": (1, 0.02),
-        "enemy_planet": (1, 0.01),
-        "my_ship": (-1, 0.001),
-        "enemy_ship": (1, 0.01)
+        "empty_planet": (1, 0.001),
+        "enemy_planet": (1, 0.002),
+        "my_ship": (-1, 0.1),
+        "enemy_ship": (1, 0.001)
 }
-botname = "Vectorian.V2"
+botname = "Vectorian"
 
 if len(sys.argv) ==2:
     weights = [float(x) for x in sys.argv[1].split("#")]
@@ -126,8 +126,8 @@ ticks = 0
 def radial(att, G, distance):
     return att*math.exp(-G*distance**2)
 
-def mexican_hat(att, G, distance):
-    return att*2/(math.sqrt(3*G)*3.141**(0.25))*(1-(distance/G)**2)*math.exp(-distance**2/(2*G**2))
+def mexican_hat(att, g, distance):
+    return att*2/(math.sqrt(3*G)*3.141**(0.25))*(1-(distance/G)**2)*exp(-distance**2/(2*G**2))
 
 while True:
     try:
@@ -194,7 +194,8 @@ while True:
                 if isinstance(entity, hlt.entity.Ship):
                     if entity.owner == game_map.get_me():
                         att, G = biases['my_ship']
-                        contrib_func = mexican_hat
+                        if distance > 20:
+                            att = 0
                     else:
                         att, G = biases['enemy_ship']
 

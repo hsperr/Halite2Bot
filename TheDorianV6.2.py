@@ -164,8 +164,7 @@ def attack(ship, game_map, player=None, force_docked=False):
     navigate_command = ship.navigate(
             ship.closest_point_to(target_ship),
             game_map,
-            speed=int(hlt.constants.MAX_SPEED),
-            ignore_ships=False)
+            speed=int(hlt.constants.MAX_SPEED))
 
     return navigate_command
 

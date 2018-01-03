@@ -132,7 +132,7 @@ def mine(ship, game_map):
         return ship.dock(closest_dockable_planet)
     else:
         #logging.info("navigating ship:{}, to: {}".format(ship, closest_dockable_planet))
-        speed = min(int(hlt.constants.MAX_SPEED), ticks)
+        speed = min(int(hlt.constants.MAX_SPEED), max(ship.id*4, ticks))
         navigate_command = navigate(ship,
                 ship.closest_point_to(closest_dockable_planet),
                 game_map,
@@ -164,7 +164,7 @@ def attack(ship, game_map, player=None, force_docked=False):
     navigate_command = ship.navigate(
             ship.closest_point_to(target_ship),
             game_map,
-            speed=min(int(hlt.constants.MAX_SPEED), ticks),
+            speed=int(hlt.constants.MAX_SPEED),
             ignore_ships=False)
 
     return navigate_command
@@ -226,12 +226,12 @@ while True:
             if len(game_map.all_players())==2:
                 num_ships_rushing = int(random.random()*2)
                 for ship in free_ships:
-#                  logging.info("Rushing with {}, {}<{}".format(num_ships_rushing, game_map.width * game_map.height, 260*170))
-#                  if len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
-#                      command = attack(ship, game_map)
-#                      if command:
-#                          command_queue.append(command)
-#                  else:
+                   logging.info("Rushing with {}, {}<{}".format(num_ships_rushing, game_map.width * game_map.height, 260*170))
+                   if len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
+                       command = attack(ship, game_map)
+                       if command:
+                           command_queue.append(command)
+                   else:
                         command = mine(ship, game_map)
                         if command:
                             command_queue.append(command)

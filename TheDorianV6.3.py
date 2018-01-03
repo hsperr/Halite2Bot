@@ -133,25 +133,27 @@ def mine(ship, game_map):
     else:
         #logging.info("navigating ship:{}, to: {}".format(ship, closest_dockable_planet))
         speed = min(int(hlt.constants.MAX_SPEED), max(ship.id*4, ticks))
+        target = ship.closest_point_to(closest_dockable_planet)
         navigate_command = navigate(ship,
-                ship.closest_point_to(closest_dockable_planet),
+                target,
                 game_map,
                 speed=speed,
                 avoid_obstacles=True,
                 max_corrections=120)
+        move_targets.append(target)
         return navigate_command
 
 def attack(ship, game_map, player=None, force_docked=False):
-    job2ids[ATTACKER].add(ship.id)
     entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
 
-
     if force_docked:
-        closest_docked_ship_distance, closest_docked_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships(), player=player, force_docked=force_docked)
-        target_distance, target_ship = closest_docked_ship_distance, closest_docked_ship
+        job2ids[ECONKILLER].add(ship.id)
+        closest_ship_distance, closest_enemy_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships(), player=player, force_docked=force_docked)
+        target_distance, target_ship = closest_ship_distance, closest_enemy_ship
     else:
-        closest_ship_distance, clostest_enemy_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships())
-        target_distance, target_ship = closest_ship_distance, clostest_enemy_ship
+        job2ids[ATTACKER].add(ship.id)
+        closest_ship_distance, closest_enemy_ship = get_closest_enemy_ship(entities_by_distance, game_map.get_me().all_ships())
+        target_distance, target_ship = closest_ship_distance, closest_enemy_ship
 
     for target in targets: 
         distance = ship.calculate_distance_between(target)
@@ -159,12 +161,20 @@ def attack(ship, game_map, player=None, force_docked=False):
             target_distance, target_ship = distance, target
 
     targets.add(target_ship)
+    speed = int(hlt.constants.MAX_SPEED)
+#   if shipid2health[ship.id] > ship.health:
+#       angle = ship.calculate_angle_between(closest_enemy_ship)
+#       new_target_dx = math.cos(math.radians((angle + 180)%360)) * distance
+#       new_target_dy = math.sin(math.radians((angle + 180)%360)) * distance
+#       target_ship = hlt.entity.Position(ship.x + new_target_dx, ship.y + new_target_dy)
+#       speed /= 2
 
     #logging.info("Attacker {}, distance: {} target: {}".format(ship.id, player_ship_distance, closest_enemy_ship))
-    navigate_command = ship.navigate(
-            ship.closest_point_to(target_ship),
+    target = ship.closest_point_to(target_ship)
+    navigate_command = navigate(ship, 
             game_map,
-            speed=int(hlt.constants.MAX_SPEED))
+            speed= speed)
+    move_target.append(target)
 
     return navigate_command
 
@@ -172,6 +182,8 @@ ticks = 0
 
 job2ids = defaultdict(set)
 shipid2health = defaultdict(int)
+
+move_targets = []
 
 ATTACKER = 'attacker'
 MINER = 'miner'
@@ -187,6 +199,7 @@ while True:
         command_queue = []
 
         my_ships = game_map.get_me().all_ships()
+
         free_ships = [x for x in my_ships if x.docking_status == x.DockingStatus.UNDOCKED and x.id not in job2ids[ATTACKER] and x.id not in job2ids[MINER] ]
         total_ships = sum(len(x.all_ships()) for x in game_map.all_players())
 
@@ -223,24 +236,18 @@ while True:
                         sum(1 for x in game_map.all_planets() if x.owner == player)
                     ))
 
+
         if ticks == 1:
-            if len(game_map.all_players())==2:
-                num_ships_rushing = int(random.random()*2)
-                for ship in free_ships:
+            num_ships_rushing = 0#int(random.random()*2)
+            for ship in free_ships:
+                if len(game_map.all_players())==2 and len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
                    logging.info("Rushing with {}, {}<{}".format(num_ships_rushing, game_map.width * game_map.height, 260*170))
-                   if len(job2ids[ATTACKER])<num_ships_rushing and game_map.width * game_map.height < 260*170:
-                       command = attack(ship, game_map)
-                       if command:
-                           command_queue.append(command)
-                   else:
-                        command = mine(ship, game_map)
-                        if command:
-                            command_queue.append(command)
-            else:
-                for ship in free_ships:
+                   command = attack(ship, game_map)
+               else:
                     command = mine(ship, game_map)
-                    if command:
-                        command_queue.append(command)
+
+           if command:
+               command_queue.append(command)
         else:
             for ship in my_ships:
                 if ship.docking_status != ship.DockingStatus.UNDOCKED:
@@ -266,39 +273,33 @@ while True:
 
                 if ship.id in job2ids[ATTACKER]:
                     command = attack(ship, game_map, player=player_with_best_economy, force_docked=best_economy)
-                    if command:
-                        command_queue.append(command)
                 elif ship.id in job2ids[MINER]:
                     command = mine(ship, game_map)
-                    if command:
-                        command_queue.append(command)
+                elif ship.id in job2ids[ECONKILLER]:
+                    logging.info("ECONKILLER {}".format(ship))
+                    command = attack(ship, game_map, force_docked=True)
                 else:
                     if best_economy:
                         if ship.id%6==0:
                             command = mine(ship, game_map)
-                            if command:
-                                command_queue.append(command)
                         else:
                             if living_players==2:
-                                if len(job2ids[ATTACKER]) > 5 and not len(job2ids[ECONKILLER]):
+                                if ship.id%2==0:
                                     command = attack(ship, game_map, force_docked=True)
                                 else:
                                     command = attack(ship, game_map)
                             else:
                                 command = attack(ship, game_map, player=player_with_best_economy, force_docked=True)
-
-                            if command:
-                                command_queue.append(command)
                     elif ship.id % 6 == 0:
                         command = attack(ship, game_map, player=player_with_best_economy, force_docked=best_economy)
-                        if command:
-                            command_queue.append(command)
                     else:
                         command = mine(ship, game_map)
-                        if command:
-                            command_queue.append(command)
 
+                if command:
+                    command_queue.append(command)
 
+        for ship in my_ships:
+            shipid2health[ship.id] = ship.health
         # Send our set of commands to the Halite engine for this turn
         game.send_command_queue(command_queue)
         # TURN END

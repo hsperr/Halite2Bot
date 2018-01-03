@@ -3,8 +3,8 @@ import re
 import multiprocessing
 import json
 import time
+import dlib
 
-from scipy.optimize import minimize
 
 class Worker(multiprocessing.Process):
     def __init__(self, task_queue, result_queue):
@@ -35,11 +35,9 @@ for i in range(NUM_WORKERS):
     worker = Worker(task_queue, result_queue)
     worker.start()
 
-starting_values = [0.02, 0.01, 0.05, 0.1, 0.01]
-bounds = [(0.00001, 0.9)] * len(starting_values)
 
 import random
-random.seed(4338998)
+random.seed(43388)
 n = 9
 runs = 50
 seeds = [int(''.join(["%s" % random.randint(0, 9) for num in range(0, n)])) for i in range(runs)]
@@ -54,11 +52,17 @@ def minimizable(weights):
     while not len(results)==runs:
         results.append(result_queue.get())
         if len(results)%10==0:
-            print(len(results), " ", end="") 
-        #    print(weights, sum(results), len(results), 'w/r', sum(results)/len(results))
-    print("") 
+            print(weights, sum(results), len(results), 'w/r', sum(results)/len(results))
+
     print(weights, sum(results)/len(results), (time.time()-t0)/len(results))
     return -sum(results)/len(results)
 
-options = {'disp': None, 'maxls': 20, 'iprint': -1, 'gtol': 1e-04, 'eps': 1e-02, 'maxiter': 15000, 'ftol': 2.220446049250313e-09, 'maxcor': 10, 'maxfun': 15000}
-print(minimize(minimizable, starting_values, method='L-BFGS-B', bounds=bounds, options=options))
+starting_values = [0.02, 0.01, 0.05, 0.1, 0.01]
+bounds = [(0.00001, 0.9)] * len(starting_values)
+
+# Find the optimal inputs to holder_table().  The print statements that follow
+# show that find_min_global() finds the optimal settings to high precision.
+print(dlib.find_min_global(minimizable, 
+                           [x[0] for x in bounds],  # Lower bound constraints on x0 and x1 respectively
+                           [x[1] for x in bounds],    # Upper bound constraints on x0 and x1 respectively
+                           80))         # The number of times find_min_global() will call holder_table()
