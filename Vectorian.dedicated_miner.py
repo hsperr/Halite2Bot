@@ -5,13 +5,14 @@ from collections import OrderedDict, defaultdict
 import sys
 
 biases = {
-        "my_planet": (1, 0.08),
-        "empty_planet": (1, 0.08),
-        "enemy_planet": (1, 0.005),
-        "my_ship": (-1, 0.9),
-        "enemy_ship": (1, 0.005)
+        "my_planet": (1, 0.02),
+        "empty_planet": (1, 0.021),
+        "enemy_planet": (1, 0.01),
+        "my_ship": (-1, 0.01),
+        "enemy_ship": (1, 0.01)
 }
-botname = "Vectorian.V4"
+
+botname = "Vectorian.V2"
 
 if len(sys.argv) ==2:
     weights = [float(x) for x in sys.argv[1].split("#")]
@@ -47,7 +48,10 @@ def obstacles_between(ship, target, ignore=(), fudge=0.1):
             obstacles.append(foreign_entity)
     return obstacles
 
-def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_corrections=90, angular_step=5):
+def cross(A, B, C):
+   return ((B.x-A.x)*(C.y-A.y))-((B.y-A.y)*(C.x-A.x))
+
+def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_corrections=90, angular_step=7):
         """
         Move a ship to a specific target position (Entity). It is recommended to place the position
         itself here, else navigate will crash into the target. If avoid_obstacles is set to True (default)
@@ -72,6 +76,7 @@ def navigate(ship, target, game_map, speed, avoid_obstacles=True, max_correction
 
         distance = ship.calculate_distance_between(target)
         angle = ship.calculate_angle_between(target)
+
         if avoid_obstacles:
             obstacles = obstacles_between(ship, target)
             if obstacles:
@@ -127,7 +132,11 @@ def radial(att, G, distance):
     return att*math.exp(-G*distance**2)
 
 def mexican_hat(att, G, distance):
-    return att*2/(math.sqrt(3*G)*3.141**(0.25))*(1-(distance/G)**2)*math.exp(-distance**2/(2*G**2))
+    G1, G2, G3 = 1, 4, 1
+    return att*2/(math.sqrt(3*G1)*3.141**(0.25))*(1-(distance/G2)**2)*math.exp(-distance**2/(2*G3**2))
+
+dedicated_miner = None
+dedicated_planet = None
 
 while True:
     try:
@@ -136,9 +145,6 @@ while True:
 
         my_id = game_map.get_me().id
         my_ships = game_map.get_me().all_ships()
-
-        if ticks<20 and len(my_ships)<3:
-            asd
         #total_ships = sum(len(x.all_ships()) for x in game_map.all_players())
         #logging.info("Tick {}".format(ticks))
         #logging.info("NumPlayers: {}, AllShips: {}, EmptyPlanets: {}".format(len(game_map.all_players()), total_ships, sum(1 for x in game_map.all_planets() if not x.is_owned())))
@@ -155,8 +161,29 @@ while True:
         command_queue = []
         move_targets = []
         done = 0
+        if not dedicated_miner in my_ships:
+            dedicated_miner = None
+
+        empty_planets = game_map.all_empty_planets()
+        if ticks > 70 and empty_planets and not dedicated_miner: 
+            distance2pair = []
+            for planet in empty_planets:
+                for ship in my_ships:
+                    if not ship.docking_status == ship.DockingStatus.UNDOCKED:
+                        continue
+                    distance = ship.calculate_distance_between(planet)
+                    distance2pair.append((distance, ship, planet))
+
+            for distance, ship, planet in sorted(distance2pair, key = lambda x: x[0]):
+                dedicated_miner = ship
+                dedicated_planet = planet
+                logging.info("dedicated {} ## {}".format(dedicated_miner, dedicated_planet))
+                break
+
         for ship in my_ships:
             if not ship.docking_status == ship.DockingStatus.UNDOCKED:
+                if ship == dedicated_miner:
+                    dedicated_miner = None
                 continue
 
             entities_by_distance = OrderedDict(sorted(game_map.nearby_entities_by_distance(ship).items(), key=lambda x: x[0]))
@@ -173,6 +200,15 @@ while True:
                     if command:
                         command_queue.append(command)
                         continue
+
+            if ship == dedicated_miner:
+                target = ship.closest_point_to(dedicated_planet)
+                command = navigate(ship, target, game_map, 7)
+                if command:
+                    move_targets.append(target)
+                    command_queue.append(command)
+                continue
+ 
 
             global_x, global_y = 0, 0
             contribs = []
@@ -197,7 +233,7 @@ while True:
                 if isinstance(entity, hlt.entity.Ship):
                     if entity.owner == game_map.get_me():
                         att, G = biases['my_ship']
-                        #contrib_func = mexican_hat
+                        contrib_func = mexican_hat
                     else:
                         att, G = biases['enemy_ship']
 

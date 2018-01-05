@@ -40,10 +40,10 @@ import sys
 
 bot1 = sys.argv[1]
 bot2 = sys.argv[2]
-random.seed(433122)
+random.seed(4331999)
 
 n = 9
-runs = 70
+runs = 200
 
 seeds = [int(''.join(["%s" % random.randint(0, 9) for num in range(0, n)])) for i in range(runs)]
 print("example seed", seeds[:2])

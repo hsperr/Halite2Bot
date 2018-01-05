@@ -5,13 +5,13 @@ from collections import OrderedDict, defaultdict
 import sys
 
 biases = {
-        "my_planet": (1, 0.08),
-        "empty_planet": (1, 0.08),
-        "enemy_planet": (1, 0.005),
-        "my_ship": (-1, 0.9),
-        "enemy_ship": (1, 0.005)
+        "my_planet": (1, 0.015),
+        "empty_planet": (1, 0.01),
+        "enemy_planet": (1, 0.02),
+        "my_ship": (-1, 7),
+        "enemy_ship": (1, 0.008)
 }
-botname = "Vectorian.V4"
+botname = "Vectorian.V2"
 
 if len(sys.argv) ==2:
     weights = [float(x) for x in sys.argv[1].split("#")]
@@ -136,9 +136,6 @@ while True:
 
         my_id = game_map.get_me().id
         my_ships = game_map.get_me().all_ships()
-
-        if ticks<20 and len(my_ships)<3:
-            asd
         #total_ships = sum(len(x.all_ships()) for x in game_map.all_players())
         #logging.info("Tick {}".format(ticks))
         #logging.info("NumPlayers: {}, AllShips: {}, EmptyPlanets: {}".format(len(game_map.all_players()), total_ships, sum(1 for x in game_map.all_planets() if not x.is_owned())))
@@ -166,7 +163,7 @@ while True:
             if closest_planet:
                 can_dock = ship.can_dock(closest_planet)
                 empty_or_free = (not closest_planet.is_owned() or (closest_planet.owner == game_map.get_me() and not closest_planet.is_full()))
-                enemy_close = closest_ship_distance and ship.calculate_distance_between(closest_ship) < 12
+                enemy_close = closest_ship_distance and ship.calculate_distance_between(closest_ship) < 25
 
                 if closest_planet and can_dock and empty_or_free and not enemy_close:
                     command = ship.dock(closest_planet)
@@ -185,9 +182,9 @@ while True:
                 distance = ship.calculate_distance_between(entity)
 
                 if isinstance(entity, hlt.entity.Planet):
-                    if not entity.is_owned():
+                    if entity.is_owned() is None:
                         att, G = biases['empty_planet']
-                        att = entity.num_spots_left()
+                        att = entity.num_spots_left() + ticks/100
                     elif entity.owner == game_map.get_me():
                         att, G = biases['my_planet']
                         if entity.is_full():

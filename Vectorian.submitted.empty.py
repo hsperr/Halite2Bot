@@ -5,13 +5,13 @@ from collections import OrderedDict, defaultdict
 import sys
 
 biases = {
-        "my_planet": (1, 0.08),
-        "empty_planet": (1, 0.08),
-        "enemy_planet": (1, 0.005),
-        "my_ship": (-1, 0.9),
-        "enemy_ship": (1, 0.005)
+        "my_planet": (1, 0.02),
+        "empty_planet": (1, 0.02),
+        "enemy_planet": (1, 0.01),
+        "my_ship": (-1, 0.01),
+        "enemy_ship": (1, 0.01)
 }
-botname = "Vectorian.V4"
+botname = "Vectorian"
 
 if len(sys.argv) ==2:
     weights = [float(x) for x in sys.argv[1].split("#")]
@@ -136,9 +136,6 @@ while True:
 
         my_id = game_map.get_me().id
         my_ships = game_map.get_me().all_ships()
-
-        if ticks<20 and len(my_ships)<3:
-            asd
         #total_ships = sum(len(x.all_ships()) for x in game_map.all_players())
         #logging.info("Tick {}".format(ticks))
         #logging.info("NumPlayers: {}, AllShips: {}, EmptyPlanets: {}".format(len(game_map.all_players()), total_ships, sum(1 for x in game_map.all_planets() if not x.is_owned())))
@@ -187,7 +184,7 @@ while True:
                 if isinstance(entity, hlt.entity.Planet):
                     if not entity.is_owned():
                         att, G = biases['empty_planet']
-                        att = entity.num_spots_left()
+                        att = entity.num_spots_left() + ticks/100
                     elif entity.owner == game_map.get_me():
                         att, G = biases['my_planet']
                         if entity.is_full():
@@ -197,7 +194,7 @@ while True:
                 if isinstance(entity, hlt.entity.Ship):
                     if entity.owner == game_map.get_me():
                         att, G = biases['my_ship']
-                        #contrib_func = mexican_hat
+                        contrib_func = mexican_hat
                     else:
                         att, G = biases['enemy_ship']
 
